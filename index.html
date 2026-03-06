@@ -9,7 +9,6 @@
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
   <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
   <style>
     :root {
@@ -5116,168 +5115,115 @@
 
     function downloadPDF() {
       const btn = document.getElementById("pdfBtn");
-      try {
-        if (typeof window.jspdf === "undefined" && typeof jsPDF === "undefined") {
-          alert("PDF library not loaded yet. Please wait a moment and try again.");
-          return;
+      if (btn) btn.textContent = "Building…";
+
+      const now = new Date();
+      const dateStr = now.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+      const timeStr = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+      const projectName = (document.querySelector("input[placeholder='Project Name']") || {}).value || "PhotoCEO";
+
+      // Build file rows from gallery OR files[]
+      const outputRows = [];
+      document.querySelectorAll("#gallery tr").forEach(row => {
+        const cells = row.querySelectorAll("td");
+        if (cells.length >= 5) {
+          outputRows.push({
+            num: cells[1] ? cells[1].textContent.trim() : "",
+            name: cells[3] ? cells[3].textContent.trim() : "",
+            type: cells[2] ? cells[2].textContent.trim() : "",
+            size: cells[4] ? cells[4].textContent.trim() : "",
+            status: cells[6] ? cells[6].textContent.trim() : "Done"
+          });
         }
-        const { jsPDF } = window.jspdf || window;
-        const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-
-        const accentR = 47, accentG = 125, accentB = 246;
-        const now = new Date();
-        const dateStr = now.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-        const timeStr = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
-        const projectName = (document.querySelector("input[placeholder='Project Name']") || {}).value || "PhotoCEO";
-
-        // Header bar
-        doc.setFillColor(accentR, accentG, accentB);
-        doc.rect(0, 0, 210, 22, "F");
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(16);
-        doc.setFont("helvetica", "bold");
-        doc.text("PhotoCEO — Session Report", 14, 14);
-        doc.setFontSize(9);
-        doc.setFont("helvetica", "normal");
-        doc.text("V1.0  |  Batch Automation", 152, 14);
-
-        // Meta info
-        doc.setTextColor(60, 60, 60);
-        doc.setFontSize(10);
-        doc.setFont("helvetica", "bold");
-        doc.text("Project:", 14, 32);
-        doc.setFont("helvetica", "normal");
-        doc.text(projectName, 40, 32);
-        doc.setFont("helvetica", "bold");
-        doc.text("Date:", 14, 39);
-        doc.setFont("helvetica", "normal");
-        doc.text(`${dateStr} at ${timeStr}`, 40, 39);
-        doc.setFont("helvetica", "bold");
-        doc.text("Total Files:", 14, 46);
-        doc.setFont("helvetica", "normal");
-        doc.text(String(files.length), 40, 46);
-
-        // Divider
-        doc.setDrawColor(accentR, accentG, accentB);
-        doc.setLineWidth(0.5);
-        doc.line(14, 51, 196, 51);
-
-        // Table header
-        let y = 58;
-        doc.setFillColor(accentR, accentG, accentB);
-        doc.rect(14, y - 5, 182, 7, "F");
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(9);
-        doc.setFont("helvetica", "bold");
-        doc.text("#", 16, y);
-        doc.text("File Name", 24, y);
-        doc.text("Type", 120, y);
-        doc.text("Size", 148, y);
-        doc.text("Status", 172, y);
-        y += 6;
-
-        // Table rows
-        doc.setFont("helvetica", "normal");
-        const outputRows = [];
-
-        // Pull from the gallery table if populated
-        const rows = document.querySelectorAll("#gallery tr");
-        rows.forEach(row => {
-          const cells = row.querySelectorAll("td");
-          if (cells.length >= 5) {
-            outputRows.push({
-              num: cells[1] ? cells[1].textContent.trim() : "",
-              name: cells[3] ? cells[3].textContent.trim() : "",
-              type: cells[2] ? cells[2].textContent.trim() : "",
-              size: cells[4] ? cells[4].textContent.trim() : "",
-              status: cells[6] ? cells[6].textContent.trim() : "Done"
-            });
-          }
+      });
+      if (outputRows.length === 0 && typeof files !== "undefined") {
+        files.forEach((f, i) => {
+          const ext = (f.name || "").split(".").pop().toUpperCase();
+          const sizeKb = f.sizeBytes ? (f.sizeBytes / 1024).toFixed(1) + " KB" : "—";
+          outputRows.push({
+            num: String(i + 1),
+            name: f.name || "—",
+            type: ext || "—",
+            size: sizeKb,
+            status: f.done ? "Done" : "Pending"
+          });
         });
-
-        // Fallback to files[] array if gallery is empty
-        if (outputRows.length === 0) {
-          files.forEach((f, i) => {
-            const ext = (f.name || "").split(".").pop().toUpperCase();
-            const sizeKb = f.sizeBytes ? (f.sizeBytes / 1024).toFixed(1) + " KB" : "—";
-            outputRows.push({
-              num: String(i + 1),
-              name: f.name || "—",
-              type: ext || "—",
-              size: sizeKb,
-              status: f.done ? "Done" : "Pending"
-            });
-          });
-        }
-
-        if (outputRows.length === 0) {
-          doc.setTextColor(120, 120, 120);
-          doc.setFontSize(10);
-          doc.text("No files in this session.", 14, y + 6);
-        } else {
-          outputRows.forEach((r, idx) => {
-            if (y > 272) {
-              doc.addPage();
-              y = 20;
-              // Repeat header on new page
-              doc.setFillColor(accentR, accentG, accentB);
-              doc.rect(14, y - 5, 182, 7, "F");
-              doc.setTextColor(255, 255, 255);
-              doc.setFont("helvetica", "bold");
-              doc.text("#", 16, y);
-              doc.text("File Name", 24, y);
-              doc.text("Type", 120, y);
-              doc.text("Size", 148, y);
-              doc.text("Status", 172, y);
-              y += 6;
-            }
-            // Alternating row shading
-            if (idx % 2 === 0) {
-              doc.setFillColor(240, 244, 255);
-              doc.rect(14, y - 4, 182, 6, "F");
-            }
-            doc.setTextColor(40, 40, 40);
-            doc.setFontSize(8);
-            doc.setFont("helvetica", "normal");
-            // Truncate long filenames
-            const nameDisplay = r.name.length > 45 ? r.name.slice(0, 42) + "..." : r.name;
-            doc.text(r.num, 16, y);
-            doc.text(nameDisplay, 24, y);
-            doc.text(r.type, 120, y);
-            doc.text(r.size, 148, y);
-            // Status color
-            if (r.status.toLowerCase().includes("done") || r.status.toLowerCase().includes("complete")) {
-              doc.setTextColor(34, 197, 94);
-            } else if (r.status.toLowerCase().includes("error") || r.status.toLowerCase().includes("fail")) {
-              doc.setTextColor(239, 68, 68);
-            } else {
-              doc.setTextColor(100, 116, 139);
-            }
-            doc.text(r.status, 172, y);
-            doc.setTextColor(40, 40, 40);
-            y += 6;
-          });
-        }
-
-        // Footer
-        const pageCount = doc.internal.getNumberOfPages();
-        for (let i = 1; i <= pageCount; i++) {
-          doc.setPage(i);
-          doc.setFontSize(8);
-          doc.setTextColor(160, 160, 160);
-          doc.text(`PhotoCEO — photoceo.com`, 14, 290);
-          doc.text(`Page ${i} of ${pageCount}`, 185, 290, { align: "right" });
-        }
-
-        const filename = `PhotoCEO_Report_${now.toISOString().slice(0, 10)}.pdf`;
-        doc.save(filename);
-
-        if (btn) { btn.textContent = "✓ Saved"; setTimeout(() => { btn.innerHTML = "⬇ PDF"; }, 2000); }
-      } catch (err) {
-        console.error("PDF error:", err);
-        if (btn) btn.textContent = "⬇ PDF";
-        alert("PDF generation failed: " + err.message);
       }
+
+      const rows = outputRows.length > 0
+        ? outputRows.map((r, i) => `
+          <tr style="background:${i % 2 === 0 ? '#f0f4ff' : '#fff'}">
+            <td>${r.num}</td>
+            <td style="word-break:break-all">${r.name}</td>
+            <td>${r.type}</td>
+            <td>${r.size}</td>
+            <td style="color:${r.status.toLowerCase().includes('done') || r.status.toLowerCase().includes('complete') ? '#16a34a' : r.status.toLowerCase().includes('error') || r.status.toLowerCase().includes('fail') ? '#dc2626' : '#64748b'}">${r.status}</td>
+          </tr>`).join("")
+        : `<tr><td colspan="5" style="color:#94a3b8;text-align:center;padding:20px">No files in this session.</td></tr>`;
+
+      const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>PhotoCEO Report — ${dateStr}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Helvetica, Arial, sans-serif; font-size: 11px; color: #1e293b; }
+  .header { background: #2f7df6; color: white; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; }
+  .header h1 { font-size: 18px; font-weight: 700; }
+  .header span { font-size: 10px; opacity: 0.85; }
+  .meta { padding: 14px 20px; border-bottom: 1px solid #e2e8f0; display: flex; gap: 30px; }
+  .meta div { display: flex; flex-direction: column; gap: 2px; }
+  .meta label { font-size: 9px; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.08em; }
+  .meta strong { font-size: 13px; color: #1e293b; }
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  thead tr { background: #2f7df6; color: white; }
+  th { padding: 7px 10px; text-align: left; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; }
+  td { padding: 6px 10px; border-bottom: 1px solid #f1f5f9; font-size: 10px; }
+  .content { padding: 10px 20px 20px; }
+  .footer { margin-top: 20px; padding-top: 10px; border-top: 1px solid #e2e8f0; font-size: 9px; color: #94a3b8; display: flex; justify-content: space-between; }
+  @media print {
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+  <div class="header">
+    <h1>PhotoCEO — Session Report</h1>
+    <span>V1.0 &nbsp;|&nbsp; Batch Automation</span>
+  </div>
+  <div class="meta">
+    <div><label>Project</label><strong>${projectName}</strong></div>
+    <div><label>Date</label><strong>${dateStr}</strong></div>
+    <div><label>Time</label><strong>${timeStr}</strong></div>
+    <div><label>Total Files</label><strong>${outputRows.length}</strong></div>
+  </div>
+  <div class="content">
+    <table>
+      <thead><tr><th>#</th><th>File Name</th><th>Type</th><th>Size</th><th>Status</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="footer">
+      <span>PhotoCEO — photoceo.com</span>
+      <span>Generated ${dateStr} at ${timeStr}</span>
+    </div>
+  </div>
+</body>
+</html>`;
+
+      const win = window.open("", "_blank", "width=800,height=900");
+      if (!win) {
+        alert("Pop-up blocked. Please allow pop-ups for this page, then try again.");
+        if (btn) btn.innerHTML = "⬇ PDF";
+        return;
+      }
+      win.document.write(html);
+      win.document.close();
+      win.focus();
+      setTimeout(() => {
+        win.print();
+        if (btn) { btn.textContent = "✓ Done"; setTimeout(() => { btn.innerHTML = "⬇ PDF"; }, 2000); }
+      }, 400);
     }
   </script>
 
